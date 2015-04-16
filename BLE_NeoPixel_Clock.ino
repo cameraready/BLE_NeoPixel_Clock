@@ -23,6 +23,7 @@ previous clock projects.
 1/15/15 - Removed 4 Neopixels and using regular blue LED for bluetooth state
 1/18/15 - Removed TimeZone library to save memory
 3/11/15 - Changed time format string to include day of week
+4/15/15 - Added midnight variable to set 00 position of LEDs
 *********************************************************************/
 
 /********************************************************************
@@ -46,6 +47,7 @@ previous clock projects.
 * Enable DST: @<true|false>
 *    example enable DST: @T
 * Location data from Android: !L
+* Set LED position for midnight: !M<00-59>
 *********************************************************************/
 
 #include <Wire.h>
@@ -83,6 +85,7 @@ time_t utc, local;
 boolean dst;                 // boolean value for calculation DST offset (0 = STD, 1 = DST)
 uint8_t localOffset;         // Standard time offset from UTC for local time
 uint8_t prevSec;             // debug current time on serial console once per second
+uint8_t midnight;            // Location of LED that represents midnight
 boolean enableDST = true;
 boolean alarmActive1 = false;
 boolean alarmActive2 = false;
@@ -115,14 +118,14 @@ static const uint32_t PROGMEM colors[] = {
 void colorWipe(uint8_t h) {
   clock.clear();
   for (uint8_t i = 0; i<clock.numPixels(); i++) {
-    clock.setPixelColor(i, pgm_read_dword(&colors[i]));
+    clock.setPixelColor((i+midnight)%60, pgm_read_dword(&colors[i]));
     clock.show();
     delay(16);
   }
   delay(250);
   // clear display before sweeping hours
   for (uint8_t i = 0; i<clock.numPixels(); i++) {
-      clock.setPixelColor(i, 0);
+      clock.setPixelColor((i+midnight)%60, 0);
       delay(16);
       clock.show();
   }
@@ -131,17 +134,17 @@ void colorWipe(uint8_t h) {
   //if (h == 0) {h=12;} // Special case for noon and midnight
   
   for(uint8_t i=0; i<clock.numPixels(); i++) {
-    if (i<=h && i!=0) // clear the first pixel and start showing hours at #1
-      clock.setPixelColor(i, hour_color);
+    if ((i+midnight)%60<=h && (i+midnight)%60!=midnight) // clear the first pixel and start showing hours at #1
+      clock.setPixelColor((i+midnight)%60, hour_color);
     else
-      clock.setPixelColor(i, 0);
+      clock.setPixelColor((i+midnight)%60, 0);
     clock.show();
     delay(16); // 1000/60 = 16 ms
   }
   delay(1000);
   
   for (uint8_t i = 0; i<clock.numPixels(); i++) {
-      clock.setPixelColor(i, 0);
+      clock.setPixelColor((i+midnight)%60, 0);
       delay(16);
       clock.show();
   }
@@ -289,7 +292,13 @@ void rxCallback(uint8_t *buffer, uint8_t len)
       //if (checkCRC(buffer) == false) { break; }
       Serial.println(F("Location Data:"));
       printLocationData(buffer);
-    }
+    } else if (toupper((char)buffer[1]) == 'M') {
+        midnight = (unhex(buffer[2])*10) + unhex(buffer[3]);
+        Serial.print(F("Midnight changed "));
+        Serial.println(midnight, DEC);
+        uart.print("Midnight changed");
+        uart.write(buffer, len);
+      }
       break;
     default: {
     /* Echo the same data back! */
@@ -358,13 +367,13 @@ void printLEDTime(tmElements_t tm) {
   uint8_t local_hr = ((24+tm.Hour+(dst*enableDST*1)-localOffset)%24);
   Serial.print(F("UTC.Hour:")); Serial.print(tm.Hour, DEC);
   Serial.print(F(" Local Hour:")); Serial.print(local_hr, DEC);
-  local_hr = (local_hr*5)%60;  // Adjust hours based on DST
+  local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
   Serial.print(F(" LED Time:"));
   printDigits(local_hr);
   Serial.print(F(":"));
-  printDigits(tm.Minute);
+  printDigits((tm.Minute+midnight)%60);
   Serial.print(F(":"));
-  printDigits(tm.Second);
+  printDigits((tm.Second+midnight)%60);
   Serial.println();
   
 }
@@ -567,6 +576,7 @@ void setup(void)
   setSyncInterval(1);
   localOffset = 5;           // Eastern Time Zone
   prevSec = 0;
+  midnight = 0;
   
   if(timeStatus() != timeSet) {
     Serial.println(F("RTC is NOT running!"));
@@ -630,11 +640,11 @@ void loop()
   
   // Display time on clock strip
   //uint8_t curr_hour = (hour()*5)%60; //UTC
-  local_hr = (local_hr*5)%60;  // Adjust hours based on DST
+  local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
   clock.clear();  // clear out previous pixel colors
   add_color(local_hr, hour_color);
-  add_color(tm.Minute, minute_color);
-  add_color(tm.Second, second_color);
+  add_color((tm.Minute+midnight)%60, minute_color);
+  add_color((tm.Second+midnight)%60, second_color);
   clock.show();
   
   // Check RTC alarms
