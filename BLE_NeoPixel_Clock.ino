@@ -134,7 +134,7 @@ void colorWipe(uint8_t h) {
   //if (h == 0) {h=12;} // Special case for noon and midnight
   
   for(uint8_t i=0; i<clock.numPixels(); i++) {
-    if ((i+midnight)%60<=h && (i+midnight)%60!=midnight) // clear the first pixel and start showing hours at #1
+    if ((i+midnight)%60<=h || (i+midnight)%60>midnight) // clear the first LED and start showing hours at #1
       clock.setPixelColor((i+midnight)%60, hour_color);
     else
       clock.setPixelColor((i+midnight)%60, 0);
