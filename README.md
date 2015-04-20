@@ -28,8 +28,9 @@ Current version is still early Beta stage. Most of the functions are in place bu
   - example enable DST: `@T`
 
 * Location data from Android: `!L`
+* Set `midnight` variable for clock orientation on LED strip `!M<00-59>`
 
 ##TODO
-* [ ] Create variable to set LED for minute/hour 0 relative to position of strip
+* [x] Create variable to set `midnight` position relative to orientation of clock.
 * [ ] Update alarm animation to non-blocking
 * [ ] Save settings to EEPROM for DST, Repeat and other variables
