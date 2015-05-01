@@ -36,3 +36,5 @@ Current version is still early Beta stage. Most of the functions are in place bu
 * [ ] Create method for sending current EEPROM values to Android app.
 * [ ] Update Android app to query clock for current settings from EEPROM when establishing connection with Bluetooth.
 * [ ] Update alarm animation to non-blocking.
+* [ ] Update RTC library to support reading temperature from RTC.
+* [ ] Add method to display current temperature on clock.

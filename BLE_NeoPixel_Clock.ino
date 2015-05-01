@@ -25,6 +25,7 @@ previous clock projects.
 3/11/15 - Changed time format string to include day of week
 4/15/15 - Added midnight variable to set 00 position of LEDs
 4/19/15 - Started adding methods to store variables in EEPROM for nonvolatile storage
+4/22/15 - Added !E to send EEPROM setting over uart for connecting with Android app
 *********************************************************************/
 
 /********************************************************************
@@ -49,6 +50,8 @@ previous clock projects.
 *    example enable DST: @T
 * Location data from Android: !L
 * Set LED position for midnight: !M<00-59>
+* Read stored settings from EEPROM: !E
+*    Date returned in format <midnight><alarm2 rpt><alarm2 en><alarm1 rpt><alarm1 en><DST>
 *********************************************************************/
 
 #include <Wire.h>
@@ -289,30 +292,41 @@ void rxCallback(uint8_t *buffer, uint8_t len)
       if (toupper((char)buffer[1]) == 'T') {
         enableDST = true;
         //uint8_t setVar = EEPROM.read(EE_EN_DST)|B00000001;  //DST variable is first bit in EEPROM
-        EEPROM.write(EE_EN_DST, 0x01); // Change to update() after upgrading to Arduino IDE 1.6.3+
+        EEPROM.update(EE_EN_DST, 0x01); // Change to update() after upgrading to Arduino IDE 1.6.3+
       } else {
         enableDST = false;
         //uint8_t setVar = EEPROM.read(EE_EN_DST)&B11111110;
-        EEPROM.write(EE_EN_DST, 0x00); // Change to update() after upgrading to Arduino IDE 1.6.3+
+        EEPROM.update(EE_EN_DST, 0x00); // Change to update() after upgrading to Arduino IDE 1.6.3+
       }
       Serial.print(F("Enable DST: "));
       Serial.println(enableDST);
       uart.print("En/dis DST");
     }
       break;
-    case '!': if (buffer[1] == 'L'){
+    case '!': if (buffer[1] == 'L'){  // Is location data needed for clock?
       //if (checkCRC(buffer) == false) { break; }
       Serial.println(F("Location Data:"));
       printLocationData(buffer);
     } else if (toupper((char)buffer[1]) == 'M') {
-        midnight = (unhex(buffer[2])*10) + unhex(buffer[3]);  // Need to check for negative values?
-        if (midnight > 59) midnight = 0;
-        EEPROM.write(EE_MIDNIGHT, midnight); // Change to update() after upgrading to Arduino IDE 1.6.3+
-        Serial.print(F("Midnight changed "));
-        Serial.println(midnight, DEC);
-        uart.print("Midnight changed");
-        uart.write(buffer, len);
-      }
+      midnight = (unhex(buffer[2])*10) + unhex(buffer[3]);  // Need to check for negative values?
+      if (midnight > 59) midnight = 0;
+      EEPROM.update(EE_MIDNIGHT, midnight); // Change to update() after upgrading to Arduino IDE 1.6.3+
+      Serial.print(F("Midnight changed "));
+      Serial.println(midnight, DEC);
+      uart.print("Midnight changed");
+      uart.write(buffer, len);
+    } else if (toupper((char)buffer[1]) == 'E') { // Send EEPROM settings to uart
+      String st = "!E";
+      st.concat(EEPROM.read(EE_MIDNIGHT));
+      st.concat((boolean)EEPROM.read(EE_RPT_ALM_2));
+      st.concat((boolean)EEPROM.read(EE_ACT_ALM_2));
+      st.concat((boolean)EEPROM.read(EE_RPT_ALM_1));
+      st.concat((boolean)EEPROM.read(EE_ACT_ALM_1));
+      st.concat((boolean)EEPROM.read(EE_EN_DST));
+      uart.print(st); // <midnight><alarm2 rpt><alarm2 en><alarm1 rpt><alarm1 en><DST>
+      //Serial.print(F("EEPROM:"));
+      //Serial.println(st);
+    }
       break;
     default: {
     /* Echo the same data back! */
@@ -504,9 +518,9 @@ void setAlarm(uint8_t alarmNum, boolean enable, boolean repeating, ALARM_TYPES_t
       RTC.setAlarm(alarmType, seconds, minutes, hours, daydate);
       //RTC.setAlarm(ALM1_MATCH_MINUTES, 00, 00, 1);
       alarmActive1 = enable;
-      EEPROM.write(EE_ACT_ALM_1, alarmActive1); // switch to EEPROM.update after IDE update
+      EEPROM.update(EE_ACT_ALM_1, alarmActive1); // switch to EEPROM.update after IDE update
       repeatAlarm1 = repeating;
-      EEPROM.write(EE_RPT_ALM_1, repeatAlarm1); // switch to EEPROM.update after IDE update
+      EEPROM.update(EE_RPT_ALM_1, repeatAlarm1); // switch to EEPROM.update after IDE update
       Serial.print(F("Alarm1 set, enb:"));
       Serial.print(alarmActive1);
       Serial.print(F("rpt:"));
@@ -517,9 +531,9 @@ void setAlarm(uint8_t alarmNum, boolean enable, boolean repeating, ALARM_TYPES_t
       //RTC.setAlarm(ALM2_EVERY_MINUTE, 00, 00, 1);
       RTC.setAlarm(alarmType, seconds, minutes, hours, daydate);
       alarmActive2 = enable;
-      EEPROM.write(EE_ACT_ALM_2, alarmActive2); // switch to EEPROM.update after IDE update
+      EEPROM.update(EE_ACT_ALM_2, alarmActive2); // switch to EEPROM.update after IDE update
       repeatAlarm2 = repeating;
-      EEPROM.write(EE_RPT_ALM_2, repeatAlarm2); // switch to EEPROM.update after IDE update
+      EEPROM.update(EE_RPT_ALM_2, repeatAlarm2); // switch to EEPROM.update after IDE update
       Serial.print(F("Alarm2 set, enb:"));
       Serial.print(alarmActive2);
       Serial.print(F("rpt:"));
@@ -690,7 +704,7 @@ void loop()
         colorWipe(local_hr); // Warning: Blocking method
         //flashAlarm(0x200000, false);
         if (!repeatAlarm2) {alarmActive2 = false; // disable alarm if not repeating
-          EEPROM.write(EE_ACT_ALM_2, 0x00);
+          EEPROM.update(EE_ACT_ALM_2, 0x00);
         }
       } else {
         // alarm not active
@@ -704,7 +718,7 @@ void loop()
         colorWipe(local_hr); // Warning: Blocking method
         //flashAlarm(0x20, true);
         if (!repeatAlarm1) {alarmActive1 = false; // disable alarm if not repeating
-          EEPROM.write(EE_ACT_ALM_1, 0x00);
+          EEPROM.update(EE_ACT_ALM_1, 0x00);
         }
       } else {
         // alarm not active
