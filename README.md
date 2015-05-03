@@ -29,12 +29,12 @@ Current version is still early Beta stage. Most of the functions are in place bu
 
 * Location data from Android: `!L`
 * Set `midnight` variable for clock orientation on LED strip `!M<00-59>`
+* Get current temperature from RTC: `!T`
 
 ##TODO
 * [x] Create variable to set `midnight` position relative to orientation of clock.
 * [X] Save values to EEPROM for DST, alarm settings and other variables.
 * [ ] Create method for sending current EEPROM values to Android app.
 * [ ] Update Android app to query clock for current settings from EEPROM when establishing connection with Bluetooth.
-* [ ] Update alarm animation to non-blocking.
-* [ ] Update RTC library to support reading temperature from RTC.
-* [ ] Add method to display current temperature on clock.
+* [ ] Update alarm and temp animation to non-blocking.
+* [x] Add method to display current temperature on clock.

@@ -52,12 +52,12 @@ previous clock projects.
 * Set LED position for midnight: !M<00-59>
 * Read stored settings from EEPROM: !E
 *    Date returned in format <midnight><alarm2 rpt><alarm2 en><alarm1 rpt><alarm1 en><DST>
+* Read temperature from RTC in celsius: !T
 *********************************************************************/
 
 #include <Wire.h>
 #include <SPI.h>
 #include <DS3232RTC.h>    //http://github.com/JChristensen/DS3232RTC
-//#include <Timezone.h>     //https://github.com/JChristensen/Timezone
 #include <Time.h>
 #include <Adafruit_BLE_UART.h>
 #include <Adafruit_NeoPixel.h>
@@ -122,7 +122,20 @@ static const uint32_t PROGMEM colors[] = {
   0x3300CC, 0x2700D8, 0x1800E7, 0x0C00F3, 0x0000FF, 0x000CF3, 
   0x001BE4, 0x0027D8, 0x0033CC, 0x0042BD, 0x004EB1, 0x005AA5, 
   0x006699, 0x00758A, 0x00817E, 0x008D72, 0x009966, 0x00A857, 
-  0x00B44B, 0x00C03F, 0x00CC33, 0x00DB24, 0x00E718, 0x00F30C, 
+  0x00B44B, 0x00C03F, 0x00CC33, 0x00DB24, 0x00E718, 0x00F30C 
+};
+
+static const uint32_t PROGMEM temps[] = {
+  0x0000FF, 0x0000FF, 0x0000FF, 0x0000FF, 0x0000FF, 0x0000FF,
+  0x0000FF, 0x0000FF, 0x0000FF, 0x0005FF, 0x001EE6, 0x0037CD,
+  0x0050B4, 0x00699B, 0x008282, 0x009B69, 0x00B450, 0x00CD37,
+  0x00E61E, 0x00FF05, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+  0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+  0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+  0x00FF00, 0x00FF00, 0x00FF00, 0x05FF00, 0x1EE600, 0x37CD00,
+  0x50B400, 0x699B00, 0x828200, 0x9B6900, 0xB45000, 0xCD3700,
+  0xE61E00, 0xFF0500, 0xFF0000, 0xFF0000, 0xFF0000, 0xFF0000,
+  0xFF0000, 0xFF0000, 0xFF0000, 0xFF0000, 0xFF0000, 0xFF0000 
 };
 
 // Animation for change of hour
@@ -154,6 +167,26 @@ void colorWipe(uint8_t h) {
   }
   delay(1000);
   
+  for (uint8_t i = 0; i<clock.numPixels(); i++) {
+      clock.setPixelColor((i+midnight)%60, 0);
+      delay(16);
+      clock.show();
+  }
+}
+
+// Animation for temperature display in Celsius
+void tempWipe(uint8_t t) {
+  clock.clear();
+  for(uint8_t i=0; i<clock.numPixels(); i++) {
+    if ((i+midnight)%60<=t || (i+midnight)%60>=midnight) // clear the first LED and start showing temp at #1
+      clock.setPixelColor((i+midnight)%60, pgm_read_dword(&temps[i]));
+    else
+      clock.setPixelColor((i+midnight)%60, 0);
+    clock.show();
+    delay(16); // 1000/60 = 16 ms
+  }
+  delay(2000);
+  // clear display before sweeping hours
   for (uint8_t i = 0; i<clock.numPixels(); i++) {
       clock.setPixelColor((i+midnight)%60, 0);
       delay(16);
@@ -326,6 +359,12 @@ void rxCallback(uint8_t *buffer, uint8_t len)
       uart.print(st); // <midnight><alarm2 rpt><alarm2 en><alarm1 rpt><alarm1 en><DST>
       //Serial.print(F("EEPROM:"));
       //Serial.println(st);
+    } else if (toupper((char)buffer[1]) == 'T') { // Get current temp from RTC
+      uint8_t temp = RTC.temperature()/4;
+      String st = "Temp:";
+      st.concat(temp);
+      uart.print(st); // Send current temp in C
+      tempWipe((temp+midnight)%60);
     }
       break;
     default: {
@@ -685,6 +724,11 @@ void loop()
     //Serial.println(EEPROM.read(EE_RPT_ALM_2), BIN);
     //Serial.print(F("Mid: "));
     //Serial.println(EEPROM.read(EE_MIDNIGHT), BIN);
+    //int t = RTC.temperature();
+    //float celsius = t / 4.0;
+    //float fahrenheit = (t/4.0) * 9.0 / 5.0 + 32.0;
+    //Serial.print(F("Temp: "));
+    //Serial.println(celsius, DEC);
   }
   
   // Display time on clock strip
