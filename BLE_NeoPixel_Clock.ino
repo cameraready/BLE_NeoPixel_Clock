@@ -26,6 +26,7 @@ previous clock projects.
 4/15/15 - Added midnight variable to set 00 position of LEDs
 4/19/15 - Started adding methods to store variables in EEPROM for nonvolatile storage
 4/22/15 - Added !E to send EEPROM setting over uart for connecting with Android app
+7/30/15 - Added switch to disable NeoPixel strip so that clock can be powered by power supply.
 *********************************************************************/
 
 /********************************************************************
@@ -74,6 +75,7 @@ previous clock projects.
 #define EE_RPT_ALM_1 12
 #define EE_RPT_ALM_2 16
 #define EE_MIDNIGHT  20
+#define SWITCHPIN 4              // the number of the switch pin to disable LEDs
 
 Adafruit_BLE_UART uart = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
 aci_evt_opcode_t prevState = ACI_EVT_DISCONNECTED;
@@ -633,6 +635,7 @@ void setup(void)
   Serial.begin(9600);
   while(!Serial); // Leonardo/Micro should wait for serial init
   Serial.println(F("Bluetooth clock demo"));
+  pinMode(SWITCHPIN, INPUT_PULLUP);
 
   uart.setRXcallback(rxCallback);
   uart.setACIcallback(aciCallback);
@@ -673,6 +676,7 @@ void setup(void)
 void loop()
 {
   uart.pollACI();
+  boolean switchState = digitalRead(SWITCHPIN);
   
   //utc = tmConvert_t(RTC.now()); // fetch the datetime
   //utc = RTC.get();
@@ -735,9 +739,11 @@ void loop()
   //uint8_t curr_hour = (hour()*5)%60; //UTC
   local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
   clock.clear();  // clear out previous pixel colors
-  add_color(local_hr, hour_color);
-  add_color((tm.Minute+midnight)%60, minute_color);
-  add_color((tm.Second+midnight)%60, second_color);
+  if (switchState == HIGH) {
+    add_color(local_hr, hour_color);
+    add_color((tm.Minute+midnight)%60, minute_color);
+    add_color((tm.Second+midnight)%60, second_color);
+  }
   clock.show();
   
   // Check RTC alarms
@@ -745,8 +751,10 @@ void loop()
       //yes, act on the alarm
       if (alarmActive2) {
         Serial.println(F("Alarm 2!"));
-        colorWipe(local_hr); // Warning: Blocking method
-        //flashAlarm(0x200000, false);
+        if (switchState == HIGH) {
+          colorWipe(local_hr); // Warning: Blocking method
+          //flashAlarm(0x200000, false);
+        }
         if (!repeatAlarm2) {alarmActive2 = false; // disable alarm if not repeating
           EEPROM.update(EE_ACT_ALM_2, 0x00);
         }
@@ -759,8 +767,10 @@ void loop()
       //yes, act on the alarm
       if (alarmActive1) {
         Serial.println(F("Alarm 1!"));
-        colorWipe(local_hr); // Warning: Blocking method
-        //flashAlarm(0x20, true);
+        if (switchState == HIGH) {
+          colorWipe(local_hr); // Warning: Blocking method
+          //flashAlarm(0x20, true);
+        }
         if (!repeatAlarm1) {alarmActive1 = false; // disable alarm if not repeating
           EEPROM.update(EE_ACT_ALM_1, 0x00);
         }
