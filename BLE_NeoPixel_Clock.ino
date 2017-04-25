@@ -27,6 +27,8 @@ previous clock projects.
 4/19/15 - Started adding methods to store variables in EEPROM for nonvolatile storage
 4/22/15 - Added !E to send EEPROM setting over uart for connecting with Android app
 7/30/15 - Added switch to disable NeoPixel strip so that clock can be powered by power supply.
+4/23/17 - Updated #includes for newer Arduino IDE 1.8.x
+4/24/17 - Updated colorSweep function to correct bug not calculating correct LED for sweep range.
 *********************************************************************/
 
 /********************************************************************
@@ -60,6 +62,7 @@ previous clock projects.
 #include <SPI.h>
 #include <DS3232RTC.h>    //http://github.com/JChristensen/DS3232RTC
 #include <Time.h>
+#include <TimeLib.h>      // Added for Arduino IDE 1.8.x compatability
 #include <Adafruit_BLE_UART.h>
 #include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
@@ -143,6 +146,7 @@ static const uint32_t PROGMEM temps[] = {
 // Animation for change of hour
 void colorWipe(uint8_t h) {
   clock.clear();
+  // show rainbow pattern to announce change of hour
   for (uint8_t i = 0; i<clock.numPixels(); i++) {
     clock.setPixelColor((i+midnight)%60, pgm_read_dword(&colors[i]));
     clock.show();
@@ -157,13 +161,21 @@ void colorWipe(uint8_t h) {
   }
   
   // sweep hours up to current hour
-  //if (h == 0) {h=12;} // Special case for noon and midnight
-  
-  for(uint8_t i=0; i<clock.numPixels(); i++) {
-    if ((i+midnight)%60<=h || (i+midnight)%60>midnight) // clear the first LED and start showing hours at #1
-      clock.setPixelColor((i+midnight)%60, hour_color);
-    else
-      clock.setPixelColor((i+midnight)%60, 0);
+  if (h == 0) {h=12;} // Special case for midnight
+
+// Previous version of hour sweep that had a bug
+//  for(uint8_t i=0; i<clock.numPixels(); i++) {
+//    if ((i+midnight)%60<=h || (i+midnight)%60>midnight) // clear the first LED and start showing hours at #1
+//      clock.setPixelColor((i+midnight)%60, hour_color);
+//    else
+//      clock.setPixelColor((i+midnight)%60, 0);
+//    clock.show();
+//    delay(16); // 1000/60 = 16 ms
+//  }
+
+// updated version that should show correct hour in sweep
+  for (uint8_t i=midnight+1; i<=(h*5)+midnight; i++) {
+    clock.setPixelColor(i%60, hour_color);
     clock.show();
     delay(16); // 1000/60 = 16 ms
   }
@@ -436,9 +448,9 @@ void printLEDTime(tmElements_t tm) {
   uint8_t local_hr = ((24+tm.Hour+(dst*enableDST*1)-localOffset)%24);
   Serial.print(F("UTC.Hour:")); Serial.print(tm.Hour, DEC);
   Serial.print(F(" Local Hour:")); Serial.print(local_hr, DEC);
-  local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
+  uint8_t led_local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
   Serial.print(F(" LED Time:"));
-  printDigits(local_hr);
+  printDigits(led_local_hr);
   Serial.print(F(":"));
   printDigits((tm.Minute+midnight)%60);
   Serial.print(F(":"));
@@ -737,10 +749,10 @@ void loop()
   
   // Display time on clock strip
   //uint8_t curr_hour = (hour()*5)%60; //UTC
-  local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
+  uint8_t led_local_hr = ((local_hr*5)+midnight)%60;  // Adjust hours based on DST
   clock.clear();  // clear out previous pixel colors
   if (switchState == HIGH) {
-    add_color(local_hr, hour_color);
+    add_color(led_local_hr, hour_color);
     add_color((tm.Minute+midnight)%60, minute_color);
     add_color((tm.Second+midnight)%60, second_color);
   }
@@ -752,7 +764,7 @@ void loop()
       if (alarmActive2) {
         Serial.println(F("Alarm 2!"));
         if (switchState == HIGH) {
-          colorWipe(local_hr); // Warning: Blocking method
+          colorWipe(local_hr%12); // Warning: Blocking method, 4/24/17 Adjusted local hour to 12hr format
           //flashAlarm(0x200000, false);
         }
         if (!repeatAlarm2) {alarmActive2 = false; // disable alarm if not repeating
@@ -768,7 +780,7 @@ void loop()
       if (alarmActive1) {
         Serial.println(F("Alarm 1!"));
         if (switchState == HIGH) {
-          colorWipe(local_hr); // Warning: Blocking method
+          colorWipe(local_hr%12); // Warning: Blocking method, 4/24/17 Adjusted local hour to 12hr format
           //flashAlarm(0x20, true);
         }
         if (!repeatAlarm1) {alarmActive1 = false; // disable alarm if not repeating
